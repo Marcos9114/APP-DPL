@@ -1,20 +1,72 @@
 import streamlit as st
-from streamlit_gsheets import GSheetsConnection
+from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+import pandas as pd
 
-try:
-  # Assuming you have secrets configured
-  gsheets_config = st.secrets["connections"]["gsheets"]
 
-  # Create the connection using the service account credentials
-  conn = GSheetsConnection(
-      service_account_info={
-          "project_id": gsheets_config["project_id"],
-          "private_key": gsheets_config["private_key"],
-          "client_email": gsheets_config["client_email"],
-          "client_id": gsheets_config["client_id"],
-      }
-  )
+# Definir las credenciales directamente en el código (por ejemplo, desde un archivo JSON o como texto)
+credentials_info = {
+    "type": "service_account",
+    "project_id": "delta-sprite-446817-b0",
+    "private_key_id": "f23960a776716bbb562dee7e53a9cdb70153087c",
+    "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCdyrlTrSNJ18Gb\nDVp4mKbS0N8uprP7GL/XiuqGVhmD9iE/WfngLfD3MpIxDSNsCS87f7a6v1H0iHZK\n6D52tJuP9VF0t7VyM0H60EYuw8u87sg66/YC7oRwxXjsoG65HF8RkwqEMnExu94y\np0KyNvg8Pc4aboSVQlHA/SPavAHTVI2teS+/iHCaYbJ1KN1GK/M+5RV6W3rNxAmF\nZwM6z2sJ2qCYyfciQRPB7h2EnI8RXggG4U3gOmtmzQiNT7inqZnYp59Hw1un8yUG\nveV8ev9EqUGpSMzAa/Wt9A01aP1pIGar0qJAljtBSnbKXwlaRq2TkPPJ5UCZNRgY\nlRESiVodAgMBAAECggEAB4zr0VU3mxD38rNw4NRtJylXhKP1eM52X5oGHud/0RC2\nBpIHovKP1URWOoKmb0UBPZee5tDA2zKsdmkmlAeQahMTEsK3q/9H6PiOYy57UU8b\nxbYEz58aN0s7vhbvNWxmIDEpD6paQEb9Gu9mAaEfv8I1Wo5vSbUitFlonc7hR3tx\nDs3CICoplocZxTd7sbvhNHIJx9i4cDtkIBOd9ZwQWYUGQrelqucR49CXKiRBQk5A\nCt5oFH4WXIlvouxBxLy9OjWB7x0X+clQTSvRu3Tu2c2n3yZVtgtxJxlkfvd85unI\neAUqv16ODPHNLHkh/ZWpL5/j5PQcJ3gA8lPv/kQgAQKBgQDNcsDIV0a/hyoHoaaw\nK5/mCK2p/sHPt0WdfZrbEJPHHUVkcwtKISjepAfETmlFNGQjMaqTLX0YCefatsvX\nkt2hauILjC76PjlHljedCIZRS5bjTEnIj5we7n0wtlzDaBg8+wc3FQ0LaPV60rdI\nge4tr4u4PHtWi6EL8cXL+dGK4QKBgQDEnhUQEQymkdrog7uSOpT0XnEIt3pMUPTs\nZoMsouJWaDnTBpGVSTKXflmydUSkwZZv1/PgVs65reQvcPkMGiSgWfTpj0A1v9Mp\n+K2OY7z7IychPH1QPcdqId5nkalMa5aUpTuE7BUnEdA9ahRJcImUW3FagQFVhBiV\nwdbqy1ISvQKBgHy/exOq+wh9GCY+H6rFMnhJOLoKOMDZtemlRQxTiofS3DncKTS/\n4cMesqCeRAmDgHJmS/7GFjksep4xdKDXSsAi2FLOsg+9DKbNLcOqU3S1g09NGVgw\n60lU4qtbcAQvBtiwTHdDzwHon3YO0L+0NV2ERECAaRvp+MX57nKmpHfBAoGAG/wk\nI1VJ56t67P1TBU0xRlbq38K9tX8QXVV59jB45rOPB2o37nesq8NgIPZv/sNPFjw2\nigfRBLyrbdU2nXJbJDeplFS/XucetyqeCVZI37XxK9ngPDuO1pxbe4JQBoCJvj6G\najTwDc+LRDKFEK7j5indyHP0LKfQmAAvBtxJokECgYB57v7bAD1sT0RnmI0D2xIS\nQ34CCbgO2/nmjqQ5NhEnl61Gh8h2Y4P1dZixQ6X2CpaFGqEstUdFkopDdcLLLTCo\n+i35Oh29+lg1HiY4YQJubwXIEEb3+Vx7d7AxwYyoLnIn5h1SGJmZy9xbB3Z3OD1U\n9bkbvo6NW2l7Cdc5qembcA==\n-----END PRIVATE KEY-----\n",
+    "client_email": "service-acc@delta-sprite-446817-b0.iam.gserviceaccount.com",
+    "client_id": "114907186536554198588",
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token",
+    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+    "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/service-acc%40delta-sprite-446817-b0.iam.gserviceaccount.com",
+    "universe_domain": "googleapis.com",
+}
 
-  # ... rest of your code to read data from spreadsheets
-except Exception as e:
-  st.error(f"Error al leer los datos de las hojas de Google Sheets: {e}")
+# Crear credenciales a partir de la información
+credentials = Credentials.from_service_account_info(credentials_info)
+
+# Usar las credenciales para acceder a Google Sheets
+service = build('sheets', 'v4', credentials=credentials)
+spreadsheet_id1 = '1SJxk1L1YA7jkp7e-8gFLKgRs6zEhHVZSaZf2mhUjXPs'  # tabla de codigos de distribuidores
+spreadsheet_id2 = '1QpN4f3ABBloPb4asaJIeXMH-BJOKpjsJl4L7EqAQf5A'  # tabla de corrientes
+
+# Leer datos de la hoja de distribuidores
+sheet = service.spreadsheets()
+result1 = sheet.values().get(spreadsheetId=spreadsheet_id1, range="Hoja1").execute()
+values1 = result1.get("values", [])
+
+# Leer datos de la hoja de corrientes
+result2 = sheet.values().get(spreadsheetId=spreadsheet_id2, range="Hoja1").execute()
+values2 = result2.get("values", [])
+
+# Convertir datos a DataFrame
+codigos_distribuidores = pd.DataFrame(values1[1:], columns=values1[0])
+corrientes_SCADA = pd.DataFrame(values2[1:], columns=values2[0])
+
+name_distribuidor = st.selectbox(
+    "Seleccione un distribuidor:",
+    codigos_distribuidores['ALIM'].unique()
+)
+
+if name_distribuidor:
+    # Filtrar codigos_distribuidores por el nombre del distribuidor seleccionado
+    filtered_distribuidores = codigos_distribuidores[codigos_distribuidores['ALIM'] == name_distribuidor]
+
+    # Realizar el merge entre corrientes_SCADA y codigos_distribuidores
+    result_df = pd.merge(
+        corrientes_SCADA,
+        filtered_distribuidores,
+        left_on='NAME',
+        right_on='SCADA'
+    )
+
+    # Seleccionar columnas de interés
+    result_df = result_df[['TIME', 'VALUE', 'ET', 'ALIM']]
+
+    # Convertir la columna TIME al tipo datetime para facilitar el gráfico
+    result_df['TIME'] = pd.to_datetime(result_df['TIME'])
+
+    # Mostrar la tabla resultante
+    st.write(result_df)
+
+    # Graficar los datos utilizando st.line_chart
+    st.line_chart(result_df.set_index('TIME')['VALUE'])
+else:
+    st.write("Por favor, seleccione un distribuidor.")
