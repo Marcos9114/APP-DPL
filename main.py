@@ -1,12 +1,12 @@
-import pandas as pd
+import pandas as pd 
 import streamlit as st
 import plotly.express as px
 
-# Ruta del archivo CSV
-ruta_archivo = 'Tablas/corrientes_alimentador_NOV2024.csv'
+# Ruta del archivo Parquet
+ruta_archivo = 'Tablas/corriente_alimentador_2024.parquet'
 
-# Leer el archivo CSV con Pandas
-df = pd.read_csv(ruta_archivo, delimiter=',')
+# Leer el archivo Parquet con Pandas
+df = pd.read_parquet(ruta_archivo)
 
 # Mostrar las primeras filas del DataFrame para verificar la lectura
 st.write("Vista previa de los datos:", df.head())
@@ -14,8 +14,8 @@ st.write("Vista previa de los datos:", df.head())
 # Convertir la columna TIME al tipo datetime
 df['TIME'] = pd.to_datetime(df['TIME'], format='%d/%m/%Y %H:%M:%S')
 
-# Convertir la columna VALUE a numérica (manejar comas como separadores decimales)
-df['VALUE'] = df['VALUE'].str.replace(',', '.').astype(float)
+# Asegurar que la columna VALUE sea numérica
+df['VALUE'] = pd.to_numeric(df['VALUE'], errors='coerce')
 
 # Obtener la lista de valores únicos en la columna ALIM
 alim_unicos = df['ALIM'].unique()
@@ -28,10 +28,7 @@ selected_alim = st.multiselect(
 
 if selected_alim:
     # Filtrar el DataFrame por los ALIM seleccionados
-    filtered_df = df[df['ALIM'].isin(selected_alim)]
-
-    # Ordenar el DataFrame por la columna TIME
-    filtered_df = filtered_df.sort_values(by='TIME', ascending=True)
+    filtered_df = df[df['ALIM'].isin(selected_alim)].sort_values(by='TIME')
 
     # Crear gráfico de línea con Plotly
     fig = px.line(filtered_df, x='TIME', y='VALUE', color='ALIM', 
@@ -41,6 +38,5 @@ if selected_alim:
 
     # Mostrar el gráfico en Streamlit
     st.plotly_chart(fig)
-
 else:
     st.write("Por favor, seleccione al menos un alimentador (ALIM).")
