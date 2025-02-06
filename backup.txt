@@ -1,0 +1,188 @@
+# from statsmodels.tsa.seasonal import seasonal_decompose
+# from sklearn.model_selection import train_test_split
+# from sklearn.ensemble import RandomForestRegressor
+# from sklearn.metrics import mean_squared_error
+# from sklearn.ensemble import IsolationForest
+
+# def page_eda():
+#     st.title("🔍 Análisis Exploratorio de Datos (EDA)")
+
+#     # Cargar datos
+#     ruta_archivo = 'Tablas/corriente_alimentador_2024.parquet'
+#     df = cargar_datos(ruta_archivo)
+
+#     # Mostrar estadísticas descriptivas
+#     st.subheader("Estadísticas Descriptivas")
+#     st.write(df.describe())
+
+#     # Distribución de valores
+#     st.subheader("Distribución de Valores")
+#     columna = st.selectbox("Seleccione una columna para visualizar su distribución:", df.columns)
+#     fig = px.histogram(df, x=columna, title=f"Distribución de {columna}")
+#     st.plotly_chart(fig)
+
+#     # Detección de valores nulos
+#     st.subheader("Valores Nulos")
+#     st.write(df.isnull().sum())
+
+# def page_series_tiempo():
+#     st.title("⏳ Análisis de Series de Tiempo")
+
+#     # Cargar datos
+#     ruta_archivo = 'Tablas/corriente_alimentador_2024.parquet'
+#     df = cargar_datos(ruta_archivo)
+
+#     # Seleccionar ALIM
+#     alim_unicos = df['ALIM'].unique()
+#     selected_alim = st.selectbox("Seleccione un alimentador (ALIM):", options=alim_unicos)
+
+#     if selected_alim:
+#         # Filtrar datos
+#         filtered_df = df[df['ALIM'] == selected_alim].set_index('TIME')
+
+#         # Descomposición de la serie de tiempo
+#         st.subheader("Descomposición de la Serie de Tiempo")
+#         decomposition = seasonal_decompose(filtered_df['VALUE'], model='additive', period=24)  # Ajusta el período según tus datos
+#         st.write("Tendencia")
+#         st.line_chart(decomposition.trend)
+#         st.write("Estacionalidad")
+#         st.line_chart(decomposition.seasonal)
+#         st.write("Residuos")
+#         st.line_chart(decomposition.resid)
+
+# def page_modelado():
+#     st.title("🤖 Modelado Predictivo")
+
+#     # Cargar datos
+#     ruta_archivo = 'Tablas/corriente_alimentador_2024.parquet'
+#     df = cargar_datos(ruta_archivo)
+
+#     # Seleccionar ALIM
+#     alim_unicos = df['ALIM'].unique()
+#     selected_alim = st.selectbox("Seleccione un alimentador (ALIM):", options=alim_unicos)
+
+#     if selected_alim:
+#         # Filtrar datos
+#         filtered_df = df[df['ALIM'] == selected_alim]
+
+#         # Preparar datos para el modelo
+#         filtered_df['TIME'] = pd.to_datetime(filtered_df['TIME'])
+#         filtered_df['HORA'] = filtered_df['TIME'].dt.hour
+#         filtered_df['DIA'] = filtered_df['TIME'].dt.day
+#         filtered_df['MES'] = filtered_df['TIME'].dt.month
+
+#         X = filtered_df[['HORA', 'DIA', 'MES']]
+#         y = filtered_df['VALUE']
+
+#         # Dividir datos en entrenamiento y prueba
+#         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+#         # Entrenar modelo
+#         model = RandomForestRegressor(n_estimators=100, random_state=42)
+#         model.fit(X_train, y_train)
+
+#         # Predecir
+#         y_pred = model.predict(X_test)
+
+#         # Mostrar métricas
+#         st.subheader("Métricas del Modelo")
+#         mse = mean_squared_error(y_test, y_pred)
+#         st.write(f"Error Cuadrático Medio (MSE): {mse}")
+
+#         # Gráfico de predicciones vs valores reales
+#         st.subheader("Predicciones vs Valores Reales")
+#         fig = px.scatter(x=y_test, y=y_pred, labels={'x': 'Valor Real', 'y': 'Predicción'}, title="Predicciones vs Valores Reales")
+#         st.plotly_chart(fig)
+
+# def page_modelado():
+#     st.title("🤖 Modelado Predictivo")
+
+#     # Cargar datos
+#     ruta_archivo = 'Tablas/corriente_alimentador_2024.parquet'
+#     df = cargar_datos(ruta_archivo)
+
+#     # Seleccionar ALIM
+#     alim_unicos = df['ALIM'].unique()
+#     selected_alim = st.selectbox("Seleccione un alimentador (ALIM):", options=alim_unicos)
+
+#     if selected_alim:
+#         # Filtrar datos
+#         filtered_df = df[df['ALIM'] == selected_alim]
+
+#         # Preparar datos para el modelo
+#         filtered_df['TIME'] = pd.to_datetime(filtered_df['TIME'])
+#         filtered_df['HORA'] = filtered_df['TIME'].dt.hour
+#         filtered_df['DIA'] = filtered_df['TIME'].dt.day
+#         filtered_df['MES'] = filtered_df['TIME'].dt.month
+
+#         X = filtered_df[['HORA', 'DIA', 'MES']]
+#         y = filtered_df['VALUE']
+
+#         # Dividir datos en entrenamiento y prueba
+#         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+#         # Entrenar modelo
+#         model = RandomForestRegressor(n_estimators=100, random_state=42)
+#         model.fit(X_train, y_train)
+
+#         # Predecir
+#         y_pred = model.predict(X_test)
+
+#         # Mostrar métricas
+#         st.subheader("Métricas del Modelo")
+#         mse = mean_squared_error(y_test, y_pred)
+#         st.write(f"Error Cuadrático Medio (MSE): {mse}")
+
+#         # Gráfico de predicciones vs valores reales
+#         st.subheader("Predicciones vs Valores Reales")
+#         fig = px.scatter(x=y_test, y=y_pred, labels={'x': 'Valor Real', 'y': 'Predicción'}, title="Predicciones vs Valores Reales")
+#         st.plotly_chart(fig)
+
+# def page_anomalias():
+#     st.title("🚨 Detección de Anomalías")
+
+#     # Cargar datos
+#     ruta_archivo = 'Tablas/corriente_alimentador_2024.parquet'
+#     df = cargar_datos(ruta_archivo)
+
+#     # Seleccionar ALIM
+#     alim_unicos = df['ALIM'].unique()
+#     selected_alim = st.selectbox("Seleccione un alimentador (ALIM):", options=alim_unicos)
+
+#     if selected_alim:
+#         # Filtrar datos
+#         filtered_df = df[df['ALIM'] == selected_alim]
+
+#         # Entrenar modelo de detección de anomalías
+#         model = IsolationForest(contamination=0.05, random_state=42)  # Ajusta el parámetro de contaminación
+#         filtered_df['ANOMALIA'] = model.fit_predict(filtered_df[['VALUE']])
+
+#         # Filtrar anomalías
+#         anomalias = filtered_df[filtered_df['ANOMALIA'] == -1]
+
+#         # Mostrar anomalías
+#         st.subheader("Anomalías Detectadas")
+#         st.write(anomalias)
+
+#         # Gráfico de anomalías
+#         st.subheader("Gráfico de Anomalías")
+#         fig = px.scatter(filtered_df, x='TIME', y='VALUE', color='ANOMALIA', title="Detección de Anomalías")
+#         st.plotly_chart(fig)
+
+
+# Barra lateral para navegación
+st.sidebar.title("Navegación")
+pagina_seleccionada = st.sidebar.radio(
+    "Seleccione la página",
+    ["Bienvenida", "Corriente por Distribuidor", "Potencia por ET", "Corriente de LAT", "Mapa de Reclamos"] #"EDA", "Series de Tiempo", "Modelado", "Anomalías"
+)
+
+# Llamar a la página seleccionada
+if pagina_seleccionada == "Bienvenida":
+    page_bienvenida()
+elif pagina_seleccionada == "Corriente por Distribuidor":
+    page_corriente_dist()
+elif pagina_seleccionada == "Potencia por ET":
+    page_potencia_et()
+elif pagina_seleccionada == "Corriente de LAT":
+    page_corriente_lat()
