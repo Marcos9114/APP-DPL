@@ -7,20 +7,16 @@ from folium.plugins import HeatMap
 import statistics
 from streamlit_folium import st_folium
 from collections import defaultdict
+import matplotlib.pyplot as plt
 
 # Función para cargar datos con caché
 @st.cache_data
 def cargar_datos(ruta):
     return pd.read_parquet(ruta)
 
-def calcular_color(valor, max_val):
-    porcentaje = valor / max_val
-    if porcentaje < 0.33:
-        return 'gray'
-    elif porcentaje < 0.66:
-        return 'blue'
-    else:
-        return 'yellow'
+def calcular_color(valor, max_valor):
+    escala = int(255 * (valor / max_valor))
+    return f"rgb({255 - escala}, {escala}, 100)"
 
 # Función para crear gráficos de línea
 def crear_grafico_linea(df, x_col, y_col, nombre_col, titulo, x_titulo, y_titulo, leyenda_titulo):
@@ -177,7 +173,6 @@ def page_corriente_dist():
     else:
         st.write("Por favor, seleccione al menos un alimentador (ALIM).")
 
-
 # Función para la página de Potencia por ET
 def page_potencia_et():
     st.title("🏭 Potencia por Estación Transformadora (ET) y Transformador (TRAFO)")
@@ -222,67 +217,93 @@ def page_corriente_lat():
 
 # Función para la página del Mapa de Reclamos
 def page_mapa_reclamos():
-    st.title("🗺️ Mapa de Reclamos Interactivo")
-    
-    # Parámetros iniciales
+    st.title("🗺️ Mapas de Sanciones por Distribuidor")
+
+    # Cargar datos
     ruta_archivo = 'Tablas/SANCIONES_30_31_x_y.parquet'
     df = cargar_datos(ruta_archivo)
+
+    st.write("### Selección de visualización:")
     
-    # Widgets para modificar parámetros
-    min_sancion = st.slider("Monto mínimo de SANCION_ANUAL para mostrar:", 0, int(df['SANCION_ANUAL'].max()), 0)
-    radio_puntos = st.slider("Radio de los puntos (CircleMarker):", 5, 50, 10)
-    zoom_inicial = st.slider("Nivel de zoom inicial:", 10, 18, 14)
+    # Selectbox para elegir solo un mapa a la vez
+    opciones_mapa = ["Mapa de Calor en función del Volumen de Reclamos", 
+                     "Mapa de Calor en función del Costo de Sanción", 
+                     "Visualización de Clientes Reclamantes"]
+    
+    mapa_seleccionado = st.selectbox("Seleccione el mapa que desea visualizar:", opciones_mapa)
 
-    # Filtrar datos según el monto mínimo seleccionado
-    df_filtrado = df[(df['SANCION_ANUAL'] > min_sancion) & (df['lat'].notnull()) & (df['lng'].notnull())]
-    lats = df_filtrado['lat'].tolist()
-    longs = df_filtrado['lng'].tolist()
-    sanciones = df_filtrado['SANCION_ANUAL'].tolist()
+    # Multiselect para seleccionar distribuidores
+    st.write("### Selección de Distribuidores:")
+    distribuidor_unicos = sorted(df['NOM_ALIM'].unique())
+    selected_distribuidores = st.multiselect("Seleccione uno o más distribuidores:", options=distribuidor_unicos)
 
-    if len(lats) > 0:
-        meanLat = statistics.mean(lats)
-        meanLong = statistics.mean(longs)
+    if selected_distribuidores:
+        # Filtrar datos por los distribuidores seleccionados
+        df_filtrado = df[df['NOM_ALIM'].isin(selected_distribuidores) & (df['SANCION_ANUAL'] > 0)]
+        lats = df_filtrado['lat'].tolist()
+        longs = df_filtrado['lng'].tolist()
+        sanciones = df_filtrado['SANCION_ANUAL'].tolist()
+
+        meanLat = statistics.mean(lats) if lats else -34.6037
+        meanLong = statistics.mean(longs) if longs else -58.3816
+
+        # Mostrar el mapa seleccionado
+        if mapa_seleccionado == "Mapa de Calor en función del Volumen de Reclamos":
+            st.write("### Mapa de Calor en función del Volumen de Reclamos")
+            ubicaciones = defaultdict(int)
+            for lat, lng in zip(lats, longs):
+                ubicaciones[(lat, lng)] += 1
+            heat_data = [[lat, lng, count] for (lat, lng), count in ubicaciones.items()]
+
+            mapObj_calor = folium.Map(location=[meanLat, meanLong], zoom_start=14)
+            HeatMap(heat_data, radius=15, blur=20, max_zoom=1).add_to(mapObj_calor)
+            st_folium(mapObj_calor, width=700, height=500)
+
+        elif mapa_seleccionado == "Mapa de Calor en función del Costo de Sanción":
+            st.write("### Mapa de Calor en función del Costo de Sanción")
+            heat_data_costo = [[lat, lng, sancion] for lat, lng, sancion in zip(lats, longs, sanciones)]
+
+            mapObj_costo_calor = folium.Map(location=[meanLat, meanLong], zoom_start=14)
+            HeatMap(heat_data_costo, radius=20, blur=15, max_zoom=1).add_to(mapObj_costo_calor)
+            st_folium(mapObj_costo_calor, width=700, height=500)
+
+        elif mapa_seleccionado == "Visualización de Clientes Reclamantes":
+            st.write("### Visualización de Clientes Reclamantes")
+            mapObj_clientes = folium.Map(location=[meanLat, meanLong], zoom_start=14)
+
+            for _, row in df_filtrado.iterrows():
+                folium.CircleMarker(
+                    location=[row['lat'], row['lng']],
+                    radius=3,
+                    color='red',
+                    fill=True,
+                    fill_color='red',
+                    fill_opacity=0.7,
+                    tooltip=f"<b>Titular:</b> {row['TITULAR']}<br><b>Suministro:</b> {row['SUMINISTRO']}<br><b>Sanción Anual:</b> ${row['SANCION_ANUAL']:.2f}"
+                ).add_to(mapObj_clientes)
+            st_folium(mapObj_clientes, width=700, height=500)
+
+        # Panel desplegable para estadísticas adicionales
+        with st.expander("📊 Ver estadísticas adicionales"):
+            st.write("### Resumen de Sanciones")
+            sancion_total = df_filtrado['SANCION_ANUAL'].sum()
+            sancion_promedio = df_filtrado['SANCION_ANUAL'].mean()
+            st.metric(label="Sanción Total", value=f"${sancion_total:,.2f}")
+            st.metric(label="Sanción Promedio por Cliente", value=f"${sancion_promedio:,.2f}")
+
+            # Gráfico de barras de sanciones por distribuidor
+            st.write("### Gráfico de Sanciones por Distribuidor")
+            distribuidor_sancion = df_filtrado.groupby('NOM_ALIM')['SANCION_ANUAL'].sum().sort_values(ascending=False)
+            fig, ax = plt.subplots(figsize=(10, 5))
+            distribuidor_sancion.plot(kind='bar', ax=ax, color='teal')
+            ax.set_title("Sanción Total por Distribuidor")
+            ax.set_xlabel("Distribuidor")
+            ax.set_ylabel("Sanción Total ($)")
+            st.pyplot(fig)
+
     else:
-        meanLat, meanLong = -34.6037, -58.3816  # Coordenadas por defecto (Buenos Aires)
+        st.warning("Por favor, seleccione al menos un distribuidor para visualizar los mapas.")
 
-    # Primer mapa: Colores personalizados por monto de SANCION_ANUAL
-    st.write("### Mapa con colores personalizados por monto de SANCION_ANUAL")
-    mapObj = folium.Map(location=[meanLat, meanLong], zoom_start=zoom_inicial)
-    max_sancion = max(sanciones) if sanciones else 1  # Evitar división por cero
-    
-    for lat, lng, sancion in zip(lats, longs, sanciones):
-        color = calcular_color(sancion, max_sancion)
-        folium.CircleMarker(
-            location=[lat, lng],
-            radius=radio_puntos,
-            color=color,
-            fill=True,
-            fill_color=color,
-            fill_opacity=0.6,
-            popup=f"SANCION_ANUAL: {sancion}"
-        ).add_to(mapObj)
-
-    st_folium(mapObj, width=700, height=600)
-
-    # Segundo mapa: Cantidad de reclamos por ubicación
-    st.write("### Mapa de Calor: Cantidad de reclamos por ubicación")
-    ubicaciones = defaultdict(int)
-    for lat, lng in zip(lats, longs):
-        ubicaciones[(lat, lng)] += 1
-
-    heat_data_cantidad = [[lat, lng, count] for (lat, lng), count in ubicaciones.items()]
-    mapObj_cantidad = folium.Map(location=[meanLat, meanLong], zoom_start=zoom_inicial)
-    
-    HeatMap(
-        heat_data_cantidad,
-        min_opacity=0.5,
-        max_val=max([count for _, _, count in heat_data_cantidad]) if heat_data_cantidad else 1,
-        radius=25,
-        blur=15,
-        max_zoom=1
-    ).add_to(mapObj_cantidad)
-
-    st_folium(mapObj_cantidad, width=700, height=600)
 
 # Barra lateral para navegación
 st.sidebar.title("Navegación")
