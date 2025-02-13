@@ -5,3 +5,5 @@ plotly
 folium
 streamlit-folium
 matplotlib
+statistics
+openpyxl

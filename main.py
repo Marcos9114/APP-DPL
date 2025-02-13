@@ -17,8 +17,17 @@ def cargar_datos(ruta):
 
 @st.cache_data
 def cargar_datos_factibilidades(ruta_archivo):
-    """Carga los datos desde el archivo Excel y devuelve un DataFrame."""
-    return pd.read_excel(ruta_archivo)
+    """Carga datos y renombra columnas problemáticas."""
+    df_fact = pd.read_excel(ruta_archivo)
+
+    # Renombrar columnas para evitar caracteres especiales y espacios
+    df_fact = df_fact.rename(columns={
+        'Obra\nSolicitada': 'Obra_Solicitada',
+        'CODIGO OBRA ': 'CODIGO_OBRA',
+        'REPRESENTANTE\nTÉCNICO (RT)': 'REPRESENTANTE_TECNICO'
+        # Añade aquí cualquier otro renombrado que necesites
+    })
+    return df_fact
 
 def calcular_color(valor, max_valor):
     escala = int(255 * (valor / max_valor))
@@ -424,14 +433,14 @@ def generar_trazabilidad(df_expediente):
 
     # Datos adicionales al final
     info_adicional = f"""
-**Información adicional:**
-- **Solicitud:** {df_expediente['SOLICITUD'].iloc[0]}, {df_expediente['TIPO_SOLICITUD'].iloc[0]}
-- **Ubicación:** {df_expediente['latitud'].iloc[0]}, {df_expediente['longitud'].iloc[0]}
-- **Obra de Infraestructura:** {df_expediente['Obra\nSolicitada'].iloc[0]} ({df_expediente['CODIGO OBRA '].iloc[0]})
-- **Compuso:** {df_expediente['COMPUSO'].iloc[0]}
-- **Representante Técnico:** {df_expediente['REPRESENTANTE\nTÉCNICO (RT)'].iloc[0]}
+    **Información adicional:**
+    - **Solicitud:** {df_expediente['SOLICITUD'].iloc[0]}, {df_expediente['TIPO_SOLICITUD'].iloc[0]}
+    - **Ubicación:** {df_expediente['latitud'].iloc[0]}, {df_expediente['longitud'].iloc[0]}
+    - **Obra de Infraestructura:** {df_expediente['Obra_Solicitada'].iloc[0]} ({df_expediente['CODIGO_OBRA'].iloc[0]})
+    - **Compuso:** {df_expediente['COMPUSO'].iloc[0]}
+    - **Representante Técnico:** {df_expediente['REPRESENTANTE_TECNICO'].iloc[0]}
     """
-    
+
     return trazabilidad + "\n\n" + info_adicional
 
 
