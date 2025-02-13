@@ -8,15 +8,24 @@ import statistics
 from streamlit_folium import st_folium
 from collections import defaultdict
 import matplotlib.pyplot as plt
+import datetime
 
 # Función para cargar datos con caché
 @st.cache_data
 def cargar_datos(ruta):
     return pd.read_parquet(ruta)
 
+@st.cache_data
+def cargar_datos_factibilidades(ruta_archivo):
+    """Carga los datos desde el archivo Excel y devuelve un DataFrame."""
+    return pd.read_excel(ruta_archivo)
+
 def calcular_color(valor, max_valor):
     escala = int(255 * (valor / max_valor))
     return f"rgb({255 - escala}, {escala}, 100)"
+
+def format_date(dt):
+    return f"{dt.day}/{dt.month}/{dt.year}"
 
 # Función para crear gráficos de línea
 def crear_grafico_linea(df, x_col, y_col, nombre_col, titulo, x_titulo, y_titulo, leyenda_titulo):
@@ -304,22 +313,139 @@ def page_mapa_reclamos():
     else:
         st.warning("Por favor, seleccione al menos un distribuidor para visualizar los mapas.")
 
+def page_factibilidades():
+    st.title("📄 Factibilidades de Suministro")
+    subpages = ["Resumen", "Trazabilidad"]
+    selected_page = st.radio("Seleccione una subpágina:", subpages)
+    
+    if selected_page == "Resumen":
+        mostrar_resumen()
+    elif selected_page == "Trazabilidad":
+        mostrar_trazabilidad()
 
-# Barra lateral para navegación
-st.sidebar.title("Navegación")
-pagina_seleccionada = st.sidebar.radio(
-    "Seleccione la página",
-    ["Bienvenida", "Corriente por Distribuidor", "Potencia por ET", "Corriente de LAT", "Mapa de Reclamos"] 
-)
+def mostrar_resumen():
+    ruta_archivo_fact = 'Tablas/PLANILLA FACTIBILIDADES desde 2020 v2 (1).xlsx'
+    df_fact = cargar_datos_factibilidades(ruta_archivo_fact)
+    
+    # Convertir fechas a formato datetime
+    df_fact['INGRESO'] = pd.to_datetime(df_fact['INGRESO'], errors='coerce')
+    df_fact['EGRESO'] = pd.to_datetime(df_fact['EGRESO'], errors='coerce')
+    
+    # Filtros
+    departamentos = df_fact['DEPARTAMENTO'].dropna().unique()
+    selected_departamentos = st.multiselect("Seleccione uno o más Departamentos:", options=departamentos)
+    
+    solicitudes = df_fact['SOLICITUD'].dropna().unique()
+    selected_solicitudes = st.multiselect("Seleccione uno o más Tipos de Solicitud:", options=solicitudes)
+    
+    tipo_solicitudes = df_fact['TIPO_SOLICITUD'].dropna().unique()
+    selected_tipo_solicitudes = st.multiselect("Seleccione uno o más Tipos de Solicitud Específicos:", options=tipo_solicitudes)
+    
+    # Filtrado del DataFrame según las selecciones
+    df_filtrado = df_fact.copy()
+    if selected_departamentos:
+        df_filtrado = df_filtrado[df_filtrado['DEPARTAMENTO'].isin(selected_departamentos)]
+    if selected_solicitudes:
+        df_filtrado = df_filtrado[df_filtrado['SOLICITUD'].isin(selected_solicitudes)]
+    if selected_tipo_solicitudes:
+        df_filtrado = df_filtrado[df_filtrado['TIPO_SOLICITUD'].isin(selected_tipo_solicitudes)]
+    
+    st.write("### Datos Filtrados", df_filtrado)
+    
+    # Mapa interactivo si hay datos de latitud y longitud
+    if 'latitud' in df_filtrado.columns and 'longitud' in df_filtrado.columns:
+        st.write("### Mapa de Expedientes")
+        df_mapa = df_filtrado.dropna(subset=['latitud', 'longitud'])
+        fig = px.scatter_mapbox(df_mapa, lat='latitud', lon='longitud', hover_name='NOMBRE', 
+                                hover_data=['DEPARTAMENTO', 'SOLICITUD', 'TIPO_SOLICITUD', 'INGRESO', 'EGRESO'], 
+                                zoom=6, height=500)
+        fig.update_layout(mapbox_style="open-street-map")
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.write("No hay datos de ubicación disponibles para mostrar en el mapa.")
 
-# Llamar a la página seleccionada
-if pagina_seleccionada == "Bienvenida":
-    page_bienvenida()
-elif pagina_seleccionada == "Corriente por Distribuidor":
-    page_corriente_dist()
-elif pagina_seleccionada == "Potencia por ET":
-    page_potencia_et()
-elif pagina_seleccionada == "Corriente de LAT":
-    page_corriente_lat()
-elif pagina_seleccionada == "Mapa de Reclamos":
-    page_mapa_reclamos()
+def mostrar_trazabilidad():
+    st.write("### Trazabilidad del Expediente")
+    ruta_archivo_fact = 'Tablas/PLANILLA FACTIBILIDADES desde 2020 v2 (1).xlsx'
+    df_fact = cargar_datos_factibilidades(ruta_archivo_fact)
+    expediente_input = st.text_input("Ingrese el número de expediente:")
+    
+    if expediente_input:
+        df_expediente = df_fact[df_fact['EXPEDIENTE'] == expediente_input]
+        if not df_expediente.empty:
+            trazabilidad = generar_trazabilidad(df_expediente)
+            st.write(trazabilidad)
+        else:
+            st.write("No se encontraron registros para el expediente ingresado.")
+
+def generar_trazabilidad(df_expediente):
+    def format_date(dt):
+        return f"{dt.day}/{dt.month}/{dt.year}"
+
+    # Obtener el número de expediente
+    expediente = df_expediente['EXPEDIENTE'].iloc[0]
+    eventos = [f"**{expediente}**"]  # Título del expediente en negrita
+
+    # Ordenar por fecha de ingreso para mantener el orden cronológico
+    df_expediente = df_expediente.sort_values(by='INGRESO')
+
+    # Iterar sobre cada fila para generar los eventos
+    for _, row in df_expediente.iterrows():
+        os_val = str(row['OS N°']).strip() if pd.notna(row['OS N°']) else ""
+        os_val_upper = os_val.upper()
+
+        if pd.notna(row['INGRESO']):
+            eventos.append(f"- Ingreso a DPL: {format_date(row['INGRESO'])}")
+
+        if os_val_upper.startswith("ENVIO OS"):
+            numero_os = os_val.replace("ENVIO OS", "").strip()
+            numero = f"N°{numero_os.replace('N', '').strip()}" if numero_os else ""
+            if pd.notna(row['EGRESO']):
+                eventos.append(f"- Envío de Orden de Servicio {numero} (DPL): {format_date(row['EGRESO'])}")
+            if pd.notna(row['RESPUESTA_OS']):
+                eventos.append(f"- Respuesta a Orden de Servicio {numero} (RT): {format_date(row['RESPUESTA_OS'])}")
+
+        elif os_val_upper.startswith("PEDIDO COMERCIAL"):
+            if pd.notna(row['EGRESO']):
+                eventos.append(f"- Envío de Pedido Comercial (DPL): {format_date(row['EGRESO'])}")
+            if pd.notna(row['RESPUESTA_OS']):
+                eventos.append(f"- Respuesta a Pedido Comercial (RT): {format_date(row['RESPUESTA_OS'])}")
+
+        elif os_val_upper.startswith("REINGRESO FINALIZADO"):
+            if pd.notna(row['EGRESO']):
+                eventos.append(f"- Finalización del Expediente (Reingreso): {format_date(row['EGRESO'])}")
+
+        elif os_val_upper == "FINALIZADO":
+            if pd.notna(row['EGRESO']):
+                eventos.append(f"- Finalización del Expediente: {format_date(row['EGRESO'])}")
+
+    # Convertir la lista de eventos en un string con saltos de línea
+    trazabilidad = "\n".join(eventos)
+
+    # Datos adicionales al final
+    info_adicional = f"""
+**Información adicional:**
+- **Solicitud:** {df_expediente['SOLICITUD'].iloc[0]}, {df_expediente['TIPO_SOLICITUD'].iloc[0]}
+- **Ubicación:** {df_expediente['latitud'].iloc[0]}, {df_expediente['longitud'].iloc[0]}
+- **Obra de Infraestructura:** {df_expediente['Obra\nSolicitada'].iloc[0]} ({df_expediente['CODIGO OBRA '].iloc[0]})
+- **Compuso:** {df_expediente['COMPUSO'].iloc[0]}
+- **Representante Técnico:** {df_expediente['REPRESENTANTE\nTÉCNICO (RT)'].iloc[0]}
+    """
+    
+    return trazabilidad + "\n\n" + info_adicional
+
+
+# Main
+if __name__ == "__main__":
+    pages = {
+        "👋 Bienvenida": page_bienvenida,
+        "📊 Corriente por Distribuidor": page_corriente_dist,
+        "🏭 Potencia por ET": page_potencia_et,
+        "⚡ Corriente de LAT": page_corriente_lat,
+        "🗺️ Mapa de Reclamos": page_mapa_reclamos,
+        "📄 Factibilidades de Suministro": page_factibilidades
+    }
+
+    st.sidebar.title("Navegación")
+    selected_page = st.sidebar.radio("Seleccione una página:", list(pages.keys()))
+    pages[selected_page]()

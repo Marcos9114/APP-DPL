@@ -1,10 +1,10 @@
 import pandas as pd
 
-# Ruta al archivo Parquet
-ruta_archivo = 'Tablas/SANCIONES_30_31_x_y.parquet'
+# Ruta del archivo
+file_path = r'Tablas\PLANILLA FACTIBILIDADES desde 2020 v2 (1).xlsx'
 
-# Leer el archivo Parquet
-df = pd.read_parquet(ruta_archivo)
+# Leer el archivo de Excel
+df = pd.read_excel(file_path)
 
-# Mostrar las primeras 5 filas
-print(df.head())
+# Mostrar todas las columnas del archivo
+print(df.columns)
