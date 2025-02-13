@@ -388,60 +388,142 @@ def mostrar_trazabilidad():
             st.write("No se encontraron registros para el expediente ingresado.")
 
 def generar_trazabilidad(df_expediente):
+    # Función auxiliar para formatear la fecha sin ceros a la izquierda
     def format_date(dt):
         return f"{dt.day}/{dt.month}/{dt.year}"
 
-    # Obtener el número de expediente
+    # Función para contar días hábiles entre dos fechas (excluyendo sábados y domingos)
+    def dias_habiles(start_date, end_date):
+        days = 0
+        current = start_date
+        # Iterar desde el día siguiente hasta end_date (inclusive o no, según se requiera)
+        while current < end_date:
+            current += datetime.timedelta(days=1)
+            if current.weekday() < 5:  # 0=lunes, 6=domingo
+                days += 1
+        return days
+
+    # Obtener el número de expediente (asumiendo que todas las filas corresponden al mismo expediente)
     expediente = df_expediente['EXPEDIENTE'].iloc[0]
     eventos = [f"**{expediente}**"]  # Título del expediente en negrita
 
-    # Ordenar por fecha de ingreso para mantener el orden cronológico
+    # Ordenar cronológicamente por la fecha de ingreso
     df_expediente = df_expediente.sort_values(by='INGRESO')
+    
+    printed_ingreso = False
+    last_ingreso_date = None
 
-    # Iterar sobre cada fila para generar los eventos
     for _, row in df_expediente.iterrows():
+        # Obtener el contenido de OS N° (convertido a mayúsculas para facilitar comparaciones)
         os_val = str(row['OS N°']).strip() if pd.notna(row['OS N°']) else ""
         os_val_upper = os_val.upper()
 
-        if pd.notna(row['INGRESO']):
-            eventos.append(f"- Ingreso a DPL: {format_date(row['INGRESO'])}")
+        # Si aún no se ha impreso un ingreso y el evento NO es un reingreso, imprimo Ingreso a DPL
+        if not printed_ingreso and os_val_upper != "REINGRESO FINALIZADO":
+            if pd.notna(row['INGRESO']):
+                last_ingreso_date = row['INGRESO']
+                eventos.append(f"- Ingreso a DPL: {format_date(row['INGRESO'])}")
+                printed_ingreso = True
 
-        if os_val_upper.startswith("ENVIO OS"):
-            numero_os = os_val.replace("ENVIO OS", "").strip()
-            numero = f"N°{numero_os.replace('N', '').strip()}" if numero_os else ""
+        # Si el OS es "REINGRESO FINALIZADO", se imprime Reingreso a DPL y se actualiza la fecha de referencia
+        if os_val_upper == "REINGRESO FINALIZADO":
+            if pd.notna(row['INGRESO']):
+                last_ingreso_date = row['INGRESO']
+                eventos.append(f"- Reingreso a DPL: {format_date(row['INGRESO'])}")
+            # Continuar con otros eventos (como la finalización) en esta fila
+
+        # Eventos de "ENVIO OS" (Orden de Servicio)
+        elif os_val_upper.startswith("ENVIO OS"):
+            # Extraer el identificador de la orden (por ejemplo, "N1", "N2", etc.)
+            remainder = os_val[8:].strip()  # lo que sigue después de "ENVIO OS"
+            numero = f"N°{remainder.replace('N','').strip()}" if remainder else ""
             if pd.notna(row['EGRESO']):
-                eventos.append(f"- Envío de Orden de Servicio {numero} (DPL): {format_date(row['EGRESO'])}")
+                if last_ingreso_date is not None:
+                    work_days = dias_habiles(last_ingreso_date, row['EGRESO'])
+                    eventos.append(f"- Envío de Orden de Servicio {numero} (DPL): {format_date(row['EGRESO'])} ({work_days} días hábiles)")
+                else:
+                    eventos.append(f"- Envío de Orden de Servicio {numero} (DPL): {format_date(row['EGRESO'])}")
+            else:
+                eventos.append(f"- Envío de Orden de Servicio {numero} (DPL): En proceso")
             if pd.notna(row['RESPUESTA_OS']):
                 eventos.append(f"- Respuesta a Orden de Servicio {numero} (RT): {format_date(row['RESPUESTA_OS'])}")
+            else:
+                eventos.append(f"- Respuesta a Orden de Servicio {numero} (RT): En proceso")
 
+        # Eventos para PEDIDO COMERCIAL
         elif os_val_upper.startswith("PEDIDO COMERCIAL"):
             if pd.notna(row['EGRESO']):
-                eventos.append(f"- Envío de Pedido Comercial (DPL): {format_date(row['EGRESO'])}")
+                if last_ingreso_date is not None:
+                    work_days = dias_habiles(last_ingreso_date, row['EGRESO'])
+                    eventos.append(f"- Pedido a Comercial (DPL): {format_date(row['EGRESO'])} ({work_days} días hábiles)")
+                else:
+                    eventos.append(f"- Pedido a Comercial (DPL): {format_date(row['EGRESO'])}")
+            else:
+                eventos.append(f"- Pedido a Comercial (DPL): En proceso")
             if pd.notna(row['RESPUESTA_OS']):
-                eventos.append(f"- Respuesta a Pedido Comercial (RT): {format_date(row['RESPUESTA_OS'])}")
+                eventos.append(f"- Respuesta de Comercial (RT): {format_date(row['RESPUESTA_OS'])}")
+            else:
+                eventos.append(f"- Respuesta de Comercial (RT): En proceso")
 
-        elif os_val_upper.startswith("REINGRESO FINALIZADO"):
+        # Eventos para PEDIDO RELEVAM/DIGIT (Relevamiento o Digitalización)
+        elif os_val_upper.startswith("PEDIDO RELEVAM") or os_val_upper.startswith("PEDIDO RELEVAM/DIGIT"):
             if pd.notna(row['EGRESO']):
-                eventos.append(f"- Finalización del Expediente (Reingreso): {format_date(row['EGRESO'])}")
+                if last_ingreso_date is not None:
+                    work_days = dias_habiles(last_ingreso_date, row['EGRESO'])
+                    eventos.append(f"- Pedido de Relevamiento/Digitalización (DPL): {format_date(row['EGRESO'])} ({work_days} días hábiles)")
+                else:
+                    eventos.append(f"- Pedido de Relevamiento/Digitalización (DPL): {format_date(row['EGRESO'])}")
+            else:
+                eventos.append(f"- Pedido de Relevamiento/Digitalización (DPL): En proceso")
+            if pd.notna(row['RESPUESTA_OS']):
+                eventos.append(f"- Relevamiento o digitalización efectuado (RT): {format_date(row['RESPUESTA_OS'])}")
+            else:
+                eventos.append(f"- Relevamiento o digitalización efectuado (RT): En proceso")
 
+        # Eventos para REVISION DNC
+        elif os_val_upper.startswith("REVISION DNC"):
+            if pd.notna(row['EGRESO']):
+                if last_ingreso_date is not None:
+                    work_days = dias_habiles(last_ingreso_date, row['EGRESO'])
+                    eventos.append(f"- Revisión DNC (DPL): {format_date(row['EGRESO'])} ({work_days} días hábiles)")
+                else:
+                    eventos.append(f"- Revisión DNC (DPL): {format_date(row['EGRESO'])}")
+            else:
+                eventos.append(f"- Revisión DNC (DPL): En proceso")
+            if pd.notna(row['RESPUESTA_OS']):
+                eventos.append(f"- Respuesta a Revisión DNC (RT): {format_date(row['RESPUESTA_OS'])}")
+            else:
+                eventos.append(f"- Respuesta a Revisión DNC (RT): En proceso")
+        
+        # Evento de finalización del expediente
         elif os_val_upper == "FINALIZADO":
             if pd.notna(row['EGRESO']):
                 eventos.append(f"- Finalización del Expediente: {format_date(row['EGRESO'])}")
+            else:
+                eventos.append(f"- Finalización del Expediente: En proceso")
 
-    # Convertir la lista de eventos en un string con saltos de línea
-    trazabilidad = "\n".join(eventos)
+        # (Se pueden agregar otros tipos de eventos aquí si es necesario)
 
-    # Datos adicionales al final
+    # Información adicional (verificando la existencia de cada columna)
+    solicitud = df_expediente['SOLICITUD'].iloc[0] if 'SOLICITUD' in df_expediente.columns else ''
+    tipo_solicitud = df_expediente['TIPO_SOLICITUD'].iloc[0] if 'TIPO_SOLICITUD' in df_expediente.columns else ''
+    latitud = df_expediente['latitud'].iloc[0] if 'latitud' in df_expediente.columns else ''
+    longitud = df_expediente['longitud'].iloc[0] if 'longitud' in df_expediente.columns else ''
+    obra_solicitada = df_expediente['Obra Solicitada'].iloc[0] if 'Obra Solicitada' in df_expediente.columns else ''
+    codigo_obra = df_expediente['CODIGO OBRA '].iloc[0] if 'CODIGO OBRA ' in df_expediente.columns else ''
+    compuso = df_expediente['COMPUSO'].iloc[0] if 'COMPUSO' in df_expediente.columns else ''
+    rep_tecnico = df_expediente['REPRESENTANTE TÉCNICO (RT)'].iloc[0] if 'REPRESENTANTE TÉCNICO (RT)' in df_expediente.columns else ''
+    
     info_adicional = f"""
-    **Información adicional:**
-    - **Solicitud:** {df_expediente['SOLICITUD'].iloc[0]}, {df_expediente['TIPO_SOLICITUD'].iloc[0]}
-    - **Ubicación:** {df_expediente['latitud'].iloc[0]}, {df_expediente['longitud'].iloc[0]}
-    - **Obra de Infraestructura:** {df_expediente['Obra_Solicitada'].iloc[0]} ({df_expediente['CODIGO_OBRA'].iloc[0]})
-    - **Compuso:** {df_expediente['COMPUSO'].iloc[0]}
-    - **Representante Técnico:** {df_expediente['REPRESENTANTE_TECNICO'].iloc[0]}
+**Información adicional:**
+- **Solicitud:** {solicitud}, {tipo_solicitud}
+- **Ubicación:** {latitud}, {longitud}
+- **Obra de Infraestructura:** {obra_solicitada} ({codigo_obra})
+- **Compuso:** {compuso}
+- **Representante Técnico:** {rep_tecnico}
     """
-
-    return trazabilidad + "\n\n" + info_adicional
+    
+    return "\n".join(eventos) + "\n\n" + info_adicional
 
 
 # Main
