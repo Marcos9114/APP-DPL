@@ -3,7 +3,7 @@ import streamlit as st
 import plotly.graph_objects as go
 import plotly.express as px
 import folium
-from folium.plugins import HeatMap
+from folium.plugins import HeatMap, Draw
 import statistics
 from streamlit_folium import st_folium
 from collections import defaultdict
@@ -45,7 +45,6 @@ def dias_habiles(start_date, end_date):
         if current.weekday() < 5:  # 0: lunes, 6: domingo
             days += 1
     return days
-
 
 # Función auxiliar para extraer el número de OS (ejemplo: "ENVIO OS N1" -> "N°1")
 def extract_os_number(os_str):
@@ -261,12 +260,11 @@ def page_mapa_reclamos():
     df = cargar_datos(ruta_archivo)
 
     st.write("### Selección de visualización:")
-    
-    # Selectbox para elegir solo un mapa a la vez
-    opciones_mapa = ["Mapa de Calor en función del Volumen de Reclamos", 
-                     "Mapa de Calor en función del Costo de Sanción", 
-                     "Visualización de Clientes Reclamantes"]
-    
+    opciones_mapa = [
+        "Mapa de Calor en función del Volumen de Reclamos", 
+        "Mapa de Calor en función del Costo de Sanción", 
+        "Visualización de Clientes Reclamantes"
+    ]
     mapa_seleccionado = st.selectbox("Seleccione el mapa que desea visualizar:", opciones_mapa)
 
     # Multiselect para seleccionar distribuidores
@@ -275,23 +273,23 @@ def page_mapa_reclamos():
     selected_distribuidores = st.multiselect("Seleccione uno o más distribuidores:", options=distribuidor_unicos)
 
     if selected_distribuidores:
-        # Filtrar datos por los distribuidores seleccionados
-        df_filtrado = df[df['NOM_ALIM'].isin(selected_distribuidores) & (df['SANCION_ANUAL'] > 0)]
+        # Filtrar datos por distribuidores seleccionados y sanciones > 0
+        df_filtrado = df[(df['NOM_ALIM'].isin(selected_distribuidores)) & (df['SANCION_ANUAL'] > 0)]
         lats = df_filtrado['lat'].tolist()
         longs = df_filtrado['lng'].tolist()
         sanciones = df_filtrado['SANCION_ANUAL'].tolist()
 
+        # Calcular posición central para el mapa
         meanLat = statistics.mean(lats) if lats else -34.6037
         meanLong = statistics.mean(longs) if longs else -58.3816
 
-        # Mostrar el mapa seleccionado
+        # Mostrar el mapa según la opción seleccionada
         if mapa_seleccionado == "Mapa de Calor en función del Volumen de Reclamos":
             st.write("### Mapa de Calor en función del Volumen de Reclamos")
             ubicaciones = defaultdict(int)
             for lat, lng in zip(lats, longs):
                 ubicaciones[(lat, lng)] += 1
             heat_data = [[lat, lng, count] for (lat, lng), count in ubicaciones.items()]
-
             mapObj_calor = folium.Map(location=[meanLat, meanLong], zoom_start=14)
             HeatMap(heat_data, radius=15, blur=20, max_zoom=1).add_to(mapObj_calor)
             st_folium(mapObj_calor, width=700, height=500)
@@ -299,7 +297,6 @@ def page_mapa_reclamos():
         elif mapa_seleccionado == "Mapa de Calor en función del Costo de Sanción":
             st.write("### Mapa de Calor en función del Costo de Sanción")
             heat_data_costo = [[lat, lng, sancion] for lat, lng, sancion in zip(lats, longs, sanciones)]
-
             mapObj_costo_calor = folium.Map(location=[meanLat, meanLong], zoom_start=14)
             HeatMap(heat_data_costo, radius=20, blur=15, max_zoom=1).add_to(mapObj_costo_calor)
             st_folium(mapObj_costo_calor, width=700, height=500)
@@ -307,7 +304,6 @@ def page_mapa_reclamos():
         elif mapa_seleccionado == "Visualización de Clientes Reclamantes":
             st.write("### Visualización de Clientes Reclamantes")
             mapObj_clientes = folium.Map(location=[meanLat, meanLong], zoom_start=14)
-
             for _, row in df_filtrado.iterrows():
                 folium.CircleMarker(
                     location=[row['lat'], row['lng']],
@@ -320,7 +316,7 @@ def page_mapa_reclamos():
                 ).add_to(mapObj_clientes)
             st_folium(mapObj_clientes, width=700, height=500)
 
-        # Panel desplegable para estadísticas adicionales
+        # Estadísticas adicionales
         with st.expander("📊 Ver estadísticas adicionales"):
             st.write("### Resumen de Sanciones")
             sancion_total = df_filtrado['SANCION_ANUAL'].sum()
@@ -328,7 +324,6 @@ def page_mapa_reclamos():
             st.metric(label="Sanción Total", value=f"${sancion_total:,.2f}")
             st.metric(label="Sanción Promedio por Cliente", value=f"${sancion_promedio:,.2f}")
 
-            # Gráfico de barras de sanciones por distribuidor
             st.write("### Gráfico de Sanciones por Distribuidor")
             distribuidor_sancion = df_filtrado.groupby('NOM_ALIM')['SANCION_ANUAL'].sum().sort_values(ascending=False)
             fig, ax = plt.subplots(figsize=(10, 5))
@@ -337,6 +332,60 @@ def page_mapa_reclamos():
             ax.set_xlabel("Distribuidor")
             ax.set_ylabel("Sanción Total ($)")
             st.pyplot(fig)
+
+        # Nueva funcionalidad: Seleccionar zona y calcular estadísticas de sanciones
+        with st.expander("🖱️ Seleccionar zona y calcular estadísticas"):
+            st.write("Seleccione un área en el mapa o ingrese las coordenadas manualmente para ver las estadísticas de sanciones en esa zona.")
+            seleccion_manual = st.checkbox("Ingresar coordenadas manualmente", value=False)
+
+            if not seleccion_manual:
+                st.info("Utilice la herramienta de dibujo para seleccionar el área de interés.")
+                # Crear un mapa con la herramienta de dibujo
+                map_draw = folium.Map(location=[meanLat, meanLong], zoom_start=14)
+                draw = Draw(export=True)
+                draw.add_to(map_draw)
+                # Mostrar el mapa con la herramienta de dibujo
+                salida = st_folium(map_draw, width=700, height=500, key='draw_map')
+                if salida and salida.get("all_drawings"):
+                    dibujos = salida.get("all_drawings")
+                    # Se usa el último dibujo realizado
+                    ultimo_dibujo = dibujos[-1]
+                    geometry = ultimo_dibujo.get("geometry", {})
+                    if geometry.get("type") == "Polygon":
+                        coords = geometry.get("coordinates", [])
+                        # Se asume que se dibujó un rectángulo o polígono: se obtiene el bounding box
+                        lats_sel = [p[1] for p in coords[0]]
+                        lons_sel = [p[0] for p in coords[0]]
+                        lat_min, lat_max = min(lats_sel), max(lats_sel)
+                        lon_min, lon_max = min(lons_sel), max(lons_sel)
+                        # Filtrar los datos dentro del área seleccionada
+                        df_zona = df_filtrado[
+                            (df_filtrado['lat'] >= lat_min) & (df_filtrado['lat'] <= lat_max) &
+                            (df_filtrado['lng'] >= lon_min) & (df_filtrado['lng'] <= lon_max)
+                        ]
+                        sancion_total_zona = df_zona['SANCION_ANUAL'].sum()
+                        sanciones_zona = df_zona.shape[0]
+                        st.success(f"Sanción total en la zona seleccionada: ${sancion_total_zona:,.2f}")
+                        st.success(f"Cantidad de sanciones en la zona: {sanciones_zona}")
+                    else:
+                        st.warning("El área dibujada no es un polígono válido.")
+                else:
+                    st.info("Dibuje un área en el mapa para ver las estadísticas.")
+            else:
+                st.write("Ingrese las coordenadas que delimitan el área de interés:")
+                lat_min_input = st.number_input("Latitud mínima", value=meanLat-0.01, format="%.6f")
+                lat_max_input = st.number_input("Latitud máxima", value=meanLat+0.01, format="%.6f")
+                lon_min_input = st.number_input("Longitud mínima", value=meanLong-0.01, format="%.6f")
+                lon_max_input = st.number_input("Longitud máxima", value=meanLong+0.01, format="%.6f")
+                if st.button("Calcular estadísticas", key='calc_stats'):
+                    df_zona_manual = df_filtrado[
+                        (df_filtrado['lat'] >= lat_min_input) & (df_filtrado['lat'] <= lat_max_input) &
+                        (df_filtrado['lng'] >= lon_min_input) & (df_filtrado['lng'] <= lon_max_input)
+                    ]
+                    sancion_total_zona_manual = df_zona_manual['SANCION_ANUAL'].sum()
+                    sanciones_zona_manual = df_zona_manual.shape[0]
+                    st.success(f"Sanción total en la zona seleccionada: ${sancion_total_zona_manual:,.2f}")
+                    st.success(f"Cantidad de sanciones en la zona: {sanciones_zona_manual}")
 
     else:
         st.warning("Por favor, seleccione al menos un distribuidor para visualizar los mapas.")
@@ -352,7 +401,7 @@ def page_factibilidades():
         mostrar_trazabilidad()
 
 def mostrar_resumen():
-    ruta_archivo_fact = 'Tablas/PLANILLA FACTIBILIDADES desde 2020 v2 (1).xlsx'
+    ruta_archivo_fact = r'Tablas/PLANILLA FACTIBILIDADES desde 2020 v2 (1).xlsx'
     df_fact = cargar_datos_factibilidades(ruta_archivo_fact)
     
     # Convertir fechas a formato datetime
@@ -394,7 +443,7 @@ def mostrar_resumen():
 
 def mostrar_trazabilidad():
     st.write("### Trazabilidad del Expediente")
-    ruta_archivo_fact = 'Tablas/PLANILLA FACTIBILIDADES desde 2020 v2 (1).xlsx'
+    ruta_archivo_fact = r'Tablas/PLANILLA FACTIBILIDADES desde 2020 v2 (1).xlsx'
     df_fact = cargar_datos_factibilidades(ruta_archivo_fact)
     expediente_input = st.text_input("Ingrese el número de expediente:")
     
@@ -423,7 +472,7 @@ def generar_trazabilidad(df_expediente):
     # Obtener el número y el nombre del expediente (se asume que todas las filas son del mismo expediente)
     expediente = df_expediente['EXPEDIENTE'].iloc[0]
     nombre_expediente = df_expediente['NOMBRE'].iloc[0] if 'NOMBRE' in df_expediente.columns else ""
-    result_lines = [f"Trazabilidad de Expediente: {expediente} - {nombre_expediente}</div>"]
+    result_lines = [f"Trazabilidad de Expediente: {expediente} - {nombre_expediente}"]
     
     
     # Ordenar cronológicamente según la columna INGRESO
@@ -535,6 +584,7 @@ def generar_trazabilidad(df_expediente):
             return "----"
 
     info_adicional = f"""
+
 **Información adicional:**
 - **Solicitud:** {get_info('SOLICITUD')}, {get_info('TIPO_SOLICITUD')}
 - **Ubicación:** {get_info('latitud')}, {get_info('longitud')}
@@ -552,7 +602,7 @@ def generar_trazabilidad(df_expediente):
 # Función para mostrar la trazabilidad con búsqueda por expediente (no case sensitive)
 def mostrar_trazabilidad():
     st.write("### Trazabilidades")
-    ruta_archivo_fact = r"Tablas\PLANILLA FACTIBILIDADES desde 2020 v2 (1).xlsx"
+    ruta_archivo_fact = r"Tablas/PLANILLA FACTIBILIDADES desde 2020 v2 (1).xlsx"
     df_fact = cargar_datos_factibilidades(ruta_archivo_fact)
     
     search_input = st.text_input("Ingrese parte del número o nombre del expediente:")
