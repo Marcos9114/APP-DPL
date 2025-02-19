@@ -536,7 +536,7 @@ def generar_trazabilidad(df_expediente):
                 ref_date = row['EGRESO']
             else:
                 result_lines.append(f"- Finalización del Expediente: En proceso")
-    
+
     trazabilidad_text = "\n".join(result_lines)
     df_finalizado = df_expediente[df_expediente['OS N°'].astype(str).str.upper() == "FINALIZADO"]
     fila_finalizado = df_finalizado.iloc[-1] if not df_finalizado.empty else None
@@ -546,6 +546,14 @@ def generar_trazabilidad(df_expediente):
             return fila_finalizado[col]
         else:
             return "----"
+
+    # Obtener el estado del expediente desde seguimiento_exptes_dpl.xls
+    seguimiento_path = os.path.join('Tablas', 'seguimiento_exptes_dpl.xls')
+    df_seguimiento = pd.read_excel(seguimiento_path)
+
+    # Buscar el expediente en el DataFrame de seguimiento
+    estado_row = df_seguimiento[df_seguimiento['EXPEDIENTE'] == expediente]
+    estado_open = estado_row['desc_est'].iloc[0] if not estado_row.empty else "Estado no encontrado"
 
     info_adicional = f"""
 
@@ -559,6 +567,7 @@ def generar_trazabilidad(df_expediente):
 - **Distribuidor:** {get_info('DISTRIBUIDOR')}
 - **ET_CD:** {get_info('ET_CD')}
 - **Comentarios adicionales:** {get_info('MOTIVO DEMORA')}
+- **ESTADO OPEN:** {estado_open}
     """
     return trazabilidad_text + "\n\n" + info_adicional
 
