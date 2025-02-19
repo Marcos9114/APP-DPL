@@ -564,7 +564,7 @@ def generar_trazabilidad(df_expediente):
 
 def page_buscador_expedientes():
     st.title("🔍 Buscador de Expedientes")
-    ruta_archivo_fact = r"Tablas/PLANILLA FACTIBILIDADES desde 2020 v2 (1).xlsx"
+    ruta_archivo_fact = r"Tablas/PLANILLA FACTIBILIDADES desde 2020 v2.xlsx"
     df_fact = cargar_datos_factibilidades(ruta_archivo_fact)
     
     search_input = st.text_input("Ingrese parte del número o nombre del expediente para buscar:")
@@ -586,7 +586,7 @@ def page_buscador_expedientes():
 
 def page_resumen_factibilidades():
     st.title("📄 Resumen de Factibilidades")
-    ruta_archivo_fact = r'Tablas/PLANILLA FACTIBILIDADES desde 2020 v2 (1).xlsx'
+    ruta_archivo_fact = r'Tablas/PLANILLA FACTIBILIDADES desde 2020 v2.xlsx'
     df_fact = cargar_datos_factibilidades(ruta_archivo_fact)
     
     # Conversión de fechas
@@ -626,7 +626,7 @@ def page_resumen_factibilidades():
 
 def page_analisis_factibilidades():
     st.title("📈 Análisis de Factibilidades")
-    ruta_archivo_fact = r'Tablas/PLANILLA FACTIBILIDADES desde 2020 v2 (1).xlsx'
+    ruta_archivo_fact = r'Tablas/PLANILLA FACTIBILIDADES desde 2020 v2.xlsx'
     df_fact = cargar_datos_factibilidades(ruta_archivo_fact)
     
     st.write("### Vista preliminar de datos")
