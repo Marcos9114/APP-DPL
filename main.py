@@ -12,6 +12,7 @@ import datetime
 import numpy as np
 from scipy.stats import norm
 import scipy.stats as stats
+import os
 
 # Importar ARIMA para el pronóstico (modelo de series de tiempo)
 from statsmodels.tsa.arima.model import ARIMA
@@ -458,6 +459,9 @@ def page_mapa_reclamos():
         st.warning("Por favor, seleccione al menos un distribuidor para visualizar los mapas.")
 
 # Función para generar la trazabilidad de un expediente (usada en Buscador)
+import os
+import pandas as pd
+
 def generar_trazabilidad(df_expediente):
     expediente = df_expediente['EXPEDIENTE'].iloc[0]
     nombre_expediente = df_expediente['NOMBRE'].iloc[0] if 'NOMBRE' in df_expediente.columns else ""
@@ -490,45 +494,6 @@ def generar_trazabilidad(df_expediente):
                 dias = dias_habiles(ref_date, row['RESPUESTA_OS']) if ref_date is not None else 0
                 result_lines.append(f"- Respuesta a Orden de Servicio {extract_os_number(os_val)} (RT): {format_date(row['RESPUESTA_OS'])} ({dias} días hábiles)")
                 ref_date = row['RESPUESTA_OS']
-        elif os_val_upper.startswith("PEDIDO COMERCIAL"):
-            if pd.notna(row['EGRESO']):
-                dias = dias_habiles(ref_date, row['EGRESO']) if ref_date is not None else 0
-                result_lines.append(f"- Pedido a Comercial (DPL): {format_date(row['EGRESO'])} ({dias} días hábiles)")
-                ref_date = row['EGRESO']
-            else:
-                result_lines.append(f"- Pedido a Comercial (DPL): En proceso")
-            if pd.notna(row['RESPUESTA_OS']):
-                dias = dias_habiles(ref_date, row['RESPUESTA_OS']) if ref_date is not None else 0
-                result_lines.append(f"- Respuesta de Comercial (RT): {format_date(row['RESPUESTA_OS'])} ({dias} días hábiles)")
-                ref_date = row['RESPUESTA_OS']
-            else:
-                result_lines.append(f"- Respuesta de Comercial (RT): En proceso")
-        elif os_val_upper.startswith("PEDIDO RELEVAM") or os_val_upper.startswith("PEDIDO RELEVAM/DIGIT"):
-            if pd.notna(row['EGRESO']):
-                dias = dias_habiles(ref_date, row['EGRESO']) if ref_date is not None else 0
-                result_lines.append(f"- Pedido de Relevamiento/Digitalización (DPL): {format_date(row['EGRESO'])} ({dias} días hábiles)")
-                ref_date = row['EGRESO']
-            else:
-                result_lines.append(f"- Pedido de Relevamiento/Digitalización (DPL): En proceso")
-            if pd.notna(row['RESPUESTA_OS']):
-                dias = dias_habiles(ref_date, row['RESPUESTA_OS']) if ref_date is not None else 0
-                result_lines.append(f"- Relevamiento o digitalización efectuado (RT): {format_date(row['RESPUESTA_OS'])} ({dias} días hábiles)")
-                ref_date = row['RESPUESTA_OS']
-            else:
-                result_lines.append(f"- Relevamiento o digitalización efectuado (RT): En proceso")
-        elif os_val_upper.startswith("REVISION DNC"):
-            if pd.notna(row['EGRESO']):
-                dias = dias_habiles(ref_date, row['EGRESO']) if ref_date is not None else 0
-                result_lines.append(f"- Revisión DNC (DPL): {format_date(row['EGRESO'])} ({dias} días hábiles)")
-                ref_date = row['EGRESO']
-            else:
-                result_lines.append(f"- Revisión DNC (DPL): En proceso")
-            if pd.notna(row['RESPUESTA_OS']):
-                dias = dias_habiles(ref_date, row['RESPUESTA_OS']) if ref_date is not None else 0
-                result_lines.append(f"- Respuesta a Revisión DNC (RT): {format_date(row['RESPUESTA_OS'])} ({dias} días hábiles)")
-                ref_date = row['RESPUESTA_OS']
-            else:
-                result_lines.append(f"- Respuesta a Revisión DNC (RT): En proceso")
         elif os_val_upper == "FINALIZADO":
             if pd.notna(row['EGRESO']):
                 dias = dias_habiles(ref_date, row['EGRESO']) if ref_date is not None else 0
@@ -549,11 +514,13 @@ def generar_trazabilidad(df_expediente):
 
     # Obtener el estado del expediente desde seguimiento_exptes_dpl.xls
     seguimiento_path = os.path.join('Tablas', 'seguimiento_exptes_dpl.xls')
-    df_seguimiento = pd.read_excel(seguimiento_path)
-
-    # Buscar el expediente en el DataFrame de seguimiento
-    estado_row = df_seguimiento[df_seguimiento['EXPEDIENTE'] == expediente]
-    estado_open = estado_row['desc_est'].iloc[0] if not estado_row.empty else "Estado no encontrado"
+    df_seguimiento = pd.read_csv(seguimiento_path, delimiter='\t', encoding='ISO-8859-1')
+    
+    # Buscar el expediente en df_seguimiento
+    estado_open = df_seguimiento.loc[df_seguimiento['num_exp'] == expediente, 'desc_est']
+    estado_open_str = estado_open.iloc[0] if not estado_open.empty else "No disponible"
+    
+    result_lines.append(f"ESTADO OPEN: {estado_open_str}")
 
     info_adicional = f"""
 
@@ -567,9 +534,12 @@ def generar_trazabilidad(df_expediente):
 - **Distribuidor:** {get_info('DISTRIBUIDOR')}
 - **ET_CD:** {get_info('ET_CD')}
 - **Comentarios adicionales:** {get_info('MOTIVO DEMORA')}
-- **ESTADO OPEN:** {estado_open}
+- ----------------------------------------------------------
+- **ESTADO OPEN:** {estado_open_str}
+- ----------------------------------------------------------
     """
     return trazabilidad_text + "\n\n" + info_adicional
+
 
 def page_buscador_expedientes():
     st.title("🔍 Buscador de Expedientes")
